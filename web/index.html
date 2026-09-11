@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Lab Studio | K4 Khám Phá LLM API</title>
+  <meta name="description" content="Giao diện trực quan demo tương tác các tính năng của Lab 01: Streaming Chatbot, So sánh Model, Đếm Token và Retry Backoff">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="logo-glow">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">LLM Lab Studio</h1>
+          <span class="brand-subtitle">K4 — Ngày 1: Khám Phá LLM API</span>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs" id="nav-tabs">
+        <button class="nav-tab active" data-tab="tab-chat" id="tab-btn-chat">
+          <span class="tab-icon">💬</span>
+          <span>Trợ Lý CLI</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-compare" id="tab-btn-compare">
+          <span class="tab-icon">⚡</span>
+          <span>So Sánh Model</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-tokens" id="tab-btn-tokens">
+          <span class="tab-icon">📊</span>
+          <span>Token & Chi Phí</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-retry" id="tab-btn-retry">
+          <span class="tab-icon">🛡️</span>
+          <span>Thử Nghiệm Retry</span>
+        </button>
+      </nav>
+
+      <!-- Provider Status Pill -->
+      <div class="status-pill" id="status-pill" title="Trạng thái kết nối API">
+        <span class="status-dot"></span>
+        <div class="status-info">
+          <span class="status-provider" id="status-provider">Đang kết nối...</span>
+          <span class="status-model" id="status-model">NVIDIA NIM</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="main-container">
+    
+    <!-- TAB 1: Chat Assistant (Live Streaming) -->
+    <section class="tab-content active" id="tab-chat">
+      <div class="chat-layout">
+        
+        <!-- Left / Side Configuration Panel -->
+        <aside class="chat-sidebar">
+          <div class="sidebar-section">
+            <h3 class="section-title">
+              <span>🎭 Chọn Persona</span>
+            </h3>
+            <p class="section-desc">Định hình tính cách & cách phản hồi qua System Prompt.</p>
+            
+            <div class="persona-presets">
+              <button class="persona-btn active" data-persona="Bạn là trợ giảng thân thiện của khóa AI, trả lời ngắn gọn, súc tích (dưới 100 từ) bằng tiếng Việt." id="persona-tutor">
+                <div class="preset-icon">🎓</div>
+                <div class="preset-content">
+                  <strong>Trợ giảng AI</strong>
+                  <small>Ngắn gọn, dễ hiểu, có code mẫu</small>
+                </div>
+              </button>
+              <button class="persona-btn" data-persona="Bạn là chuyên gia tài chính cao cấp, giải thích chuyên sâu bằng các thuật ngữ kinh tế và tài chính kỹ thuật." id="persona-finance">
+                <div class="preset-icon">💼</div>
+                <div class="preset-content">
+                  <strong>Chuyên gia tài chính</strong>
+                  <small>Thuật ngữ chuyên sâu, học thuật</small>
+                </div>
+              </button>
+              <button class="persona-btn" data-persona="Bạn là giáo viên tiểu học, giải thích mọi thứ thật đơn giản bằng ngôn ngữ dễ thương cho trẻ 8 tuổi." id="persona-teacher">
+                <div class="preset-icon">🏫</div>
+                <div class="preset-content">
+                  <strong>Giáo viên tiểu học</strong>
+                  <small>Ngôn từ mộc mạc, ẩn dụ trực quan</small>
+                </div>
+              </button>
+              <button class="persona-btn" id="persona-custom-toggle">
+                <div class="preset-icon">⚙️</div>
+                <div class="preset-content">
+                  <strong>Tùy chỉnh Persona</strong>
+                  <small>Tự nhập system prompt</small>
+                </div>
+              </button>
+            </div>
+
+            <div class="custom-persona-box" id="custom-persona-box" style="display: none;">
+              <textarea id="custom-persona-input" rows="3" placeholder="Nhập System Prompt của riêng bạn..."></textarea>
+            </div>
+          </div>
+
+          <!-- Parameter Controls -->
+          <div class="sidebar-section">
+            <h3 class="section-title">
+              <span>🎛️ Tham Số Sinh Token</span>
+            </h3>
+            <div class="param-group">
+              <div class="param-header">
+                <label for="chat-temp">Temperature: <span id="chat-temp-val">0.7</span></label>
+                <small class="param-hint">Độ sáng tạo / ngẫu nhiên</small>
+              </div>
+              <input type="range" id="chat-temp" min="0.0" max="1.5" step="0.1" value="0.7">
+            </div>
+
+            <div class="param-group">
+              <div class="param-header">
+                <label for="chat-maxtokens">Max Tokens: <span id="chat-maxtokens-val">256</span></label>
+                <small class="param-hint">Độ dài trần phản hồi</small>
+              </div>
+              <input type="range" id="chat-maxtokens" min="64" max="1024" step="32" value="256">
+            </div>
+
+            <div class="param-group">
+              <div class="param-header">
+                <label for="chat-model-select">Chọn Model:</label>
+              </div>
+              <select id="chat-model-select" class="custom-select">
+                <option value="large">Model Lớn (nemotron-3-super)</option>
+                <option value="mini">Model Nhỏ (llama-3.2)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Session Statistics Card -->
+          <div class="sidebar-section stats-card">
+            <h3 class="section-title">
+              <span>📈 Thống Kê Phiên Chat</span>
+            </h3>
+            <div class="stats-grid">
+              <div class="stat-item">
+                <span class="stat-label">Số lượt</span>
+                <span class="stat-value" id="stat-turns">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Tổng Token</span>
+                <span class="stat-value" id="stat-tokens">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Chi phí ước tính</span>
+                <span class="stat-value highlight" id="stat-cost">$0.0000</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Độ trễ gần nhất</span>
+                <span class="stat-value" id="stat-latency">0.0s</span>
+              </div>
+            </div>
+            <button class="btn-secondary btn-sm" id="btn-clear-chat">
+              <span>🗑️ Xóa Lịch Sử Chat</span>
+            </button>
+          </div>
+        </aside>
+
+        <!-- Right / Chat Conversation Stream Area -->
+        <div class="chat-main">
+          <div class="chat-messages" id="chat-messages">
+            <div class="system-notice">
+              <div class="notice-badge">System Prompt Cố Định</div>
+              <div class="notice-text" id="active-persona-preview">
+                Bạn là trợ giảng thân thiện của khóa AI, trả lời ngắn gọn, súc tích (dưới 100 từ) bằng tiếng Việt.
+              </div>
+            </div>
+            <div class="message-bubble assistant-msg">
+              <div class="msg-avatar">🤖</div>
+              <div class="msg-body">
+                <div class="msg-header">
+                  <span class="msg-author">Trợ lý AI</span>
+                  <span class="msg-time">Vừa xong</span>
+                </div>
+                <div class="msg-text">
+                  Xin chào! Tôi là trợ lý AI được xây dựng trong bài Lab 01. Bạn có thể trò chuyện với tôi theo thời gian thực (Streaming) hoặc thử các persona khác nhau ở cột bên trái nhé!
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chat Input Form -->
+          <form class="chat-input-area" id="chat-form">
+            <div class="input-wrapper">
+              <textarea 
+                id="chat-input" 
+                rows="1" 
+                placeholder="Nhập tin nhắn... (Nhấn Enter để gửi, Shift+Enter để xuống dòng)"
+                required
+              ></textarea>
+              <button type="submit" class="btn-send" id="btn-send-msg" title="Gửi tin nhắn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                </svg>
+              </button>
+            </div>
+            <div class="input-footer">
+              <span class="input-hint">💡 Cửa sổ ngữ cảnh tự động duy trì 3 lượt gần nhất (6 message).</span>
+              <button type="button" class="btn-link" id="btn-show-history">Xem Memory [6 msgs]</button>
+            </div>
+          </form>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TAB 2: Model Comparison Arena -->
+    <section class="tab-content" id="tab-compare">
+      <div class="arena-container">
+        
+        <div class="arena-top">
+          <div class="arena-header">
+            <h2 class="arena-title">So Sánh Trực Diện: Model Lớn vs Model Nhỏ</h2>
+            <p class="arena-desc">Chạy cùng một câu hỏi qua cả 2 model đồng thời để đánh giá: Độ chi tiết, Tốc độ (Latency) và Chi phí ước tính.</p>
+          </div>
+
+          <div class="arena-input-card">
+            <label for="compare-prompt">Câu hỏi so sánh (Prompt):</label>
+            <div class="prompt-input-row">
+              <textarea id="compare-prompt" rows="2" placeholder="Ví dụ: Giải thích khác biệt giữa temperature và top_p trong một câu.">Giải thích khác biệt giữa temperature và top_p trong một câu.</textarea>
+              <button class="btn-primary" id="btn-run-compare">
+                <span class="btn-icon">⚡</span>
+                <span>Chạy So Sánh</span>
+              </button>
+            </div>
+
+            <!-- Quick Prompts Chips -->
+            <div class="quick-prompts">
+              <span class="quick-label">Gợi ý câu hỏi:</span>
+              <button type="button" class="chip-btn" data-text="Giải thích khác biệt giữa temperature và top_p trong một câu.">Temperature vs Top_p</button>
+              <button type="button" class="chip-btn" data-text="Hãy kể cho tôi một sự thật thú vị và độc đáo về Việt Nam.">Sự thật về Việt Nam</button>
+              <button type="button" class="chip-btn" data-text="Giải thích khái niệm Blockchain cho người mới bắt đầu.">Blockchain là gì?</button>
+              <button type="button" class="chip-btn" data-text="Viết một hàm Python tính Fibonacci bằng đệ quy có memoization.">Code Python Fibonacci</button>
+            </div>
+
+            <div class="arena-controls">
+              <div class="control-item">
+                <label for="compare-temp">Temperature: <strong id="compare-temp-val">0.7</strong></label>
+                <input type="range" id="compare-temp" min="0.0" max="1.5" step="0.1" value="0.7">
+              </div>
+              <div class="control-item">
+                <label for="compare-topp">Top P: <strong id="compare-topp-val">0.9</strong></label>
+                <input type="range" id="compare-topp" min="0.1" max="1.0" step="0.05" value="0.9">
+              </div>
+              <div class="control-item">
+                <label for="compare-maxtokens">Max Tokens: <strong id="compare-maxtokens-val">256</strong></label>
+                <input type="range" id="compare-maxtokens" min="64" max="1024" step="32" value="256">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Comparison Cards Display -->
+        <div class="arena-grid">
+          
+          <!-- Large Model Card -->
+          <div class="model-card large-model">
+            <div class="model-card-header">
+              <div class="model-badge badge-primary">Model Lớn (Full)</div>
+              <h3 class="model-name" id="arena-large-name">nvidia/nemotron-3-super-120b-a12b</h3>
+              <div class="model-tags">
+                <span class="tag">Mạnh mẽ</span>
+                <span class="tag">Lập luận cao</span>
+              </div>
+            </div>
+
+            <div class="model-meta-bar">
+              <div class="meta-item">
+                <span class="meta-label">Độ trễ:</span>
+                <span class="meta-value" id="arena-large-latency">-- s</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Tokens:</span>
+                <span class="meta-value" id="arena-large-tokens">--</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Chi phí:</span>
+                <span class="meta-value highlight" id="arena-large-cost">--</span>
+              </div>
+            </div>
+
+            <div class="model-response-box" id="arena-large-response">
+              <div class="empty-state">Bấm nút "Chạy So Sánh" để xem phản hồi của model lớn...</div>
+            </div>
+          </div>
+
+          <!-- Mini Model Card -->
+          <div class="model-card mini-model">
+            <div class="model-card-header">
+              <div class="model-badge badge-secondary">Model Nhỏ (Mini)</div>
+              <h3 class="model-name" id="arena-mini-name">meta/llama-3.2-11b-vision-instruct</h3>
+              <div class="model-tags">
+                <span class="tag tag-green">Tốc độ cao</span>
+                <span class="tag tag-green">Tiết kiệm chi phí</span>
+              </div>
+            </div>
+
+            <div class="model-meta-bar">
+              <div class="meta-item">
+                <span class="meta-label">Độ trễ:</span>
+                <span class="meta-value" id="arena-mini-latency">-- s</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Tokens:</span>
+                <span class="meta-value" id="arena-mini-tokens">--</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Chi phí:</span>
+                <span class="meta-value highlight" id="arena-mini-cost">--</span>
+              </div>
+            </div>
+
+            <div class="model-response-box" id="arena-mini-response">
+              <div class="empty-state">Bấm nút "Chạy So Sánh" để xem phản hồi của model nhỏ...</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Evaluation Summary Bar -->
+        <div class="arena-summary-bar" id="arena-summary-bar" style="display: none;">
+          <div class="summary-badge">💡 Nhận xét nhanh:</div>
+          <div class="summary-text" id="arena-summary-text">
+            Đang phân tích sự đánh đổi giữa hai model...
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TAB 3: Token Counter & Cost Calculator -->
+    <section class="tab-content" id="tab-tokens">
+      <div class="token-container">
+        
+        <div class="token-header">
+          <h2>Bộ Phân Tích Token & Chi Phí Thực Tế (tiktoken)</h2>
+          <p>Mô hình hóa sự khác biệt giữa đếm từ thô và bộ mã hóa Byte-Pair Encoding (BPE), giải thích tại sao tiếng Việt tốn nhiều token hơn tiếng Anh.</p>
+        </div>
+
+        <div class="token-grid">
+          
+          <!-- Input Card -->
+          <div class="token-card">
+            <div class="card-header">
+              <h3>Văn Bản Thử Nghiệm</h3>
+              <div class="quick-text-btns">
+                <button type="button" class="btn-xs" id="btn-sample-vi">Đoạn Tiếng Việt (~100 từ)</button>
+                <button type="button" class="btn-xs" id="btn-sample-en">Đoạn Tiếng Anh (~100 từ)</button>
+              </div>
+            </div>
+            
+            <textarea id="token-input-text" rows="8" placeholder="Dán hoặc nhập đoạn văn bản vào đây để phân tích token ngay lập tức..."></textarea>
+            
+            <div class="token-card-footer">
+              <button class="btn-primary" id="btn-calc-tokens">Phân Tích Token</button>
+              <span class="calc-status" id="calc-status">Tự động cập nhật khi gõ</span>
+            </div>
+          </div>
+
+          <!-- Result Metrics Card -->
+          <div class="token-card">
+            <div class="card-header">
+              <h3>Kết Quả Đo Lường</h3>
+              <span class="badge-encoding">Encoding: o200k_base / cl100k_base</span>
+            </div>
+
+            <div class="metric-tiles">
+              <div class="tile">
+                <span class="tile-number" id="metric-tokens">0</span>
+                <span class="tile-label">Token Thực Tế (tiktoken)</span>
+              </div>
+              <div class="tile">
+                <span class="tile-number" id="metric-words">0</span>
+                <span class="tile-label">Số Từ (Words)</span>
+              </div>
+              <div class="tile">
+                <span class="tile-number" id="metric-est-words">0</span>
+                <span class="tile-label">Ước Lượng Thô (words / 0.75)</span>
+              </div>
+              <div class="tile">
+                <span class="tile-number" id="metric-diff">0%</span>
+                <span class="tile-label">Chênh Lệch Thực vs Thô</span>
+              </div>
+            </div>
+
+            <!-- Cost Comparison Box -->
+            <div class="cost-table-card">
+              <h4>Bảng Chi Phí Ước Tính (Bảng Giá Lab)</h4>
+              <table class="cost-table">
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th>Nếu là Input</th>
+                    <th>Nếu là Output</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>GPT-4o (Lớn)</strong></td>
+                    <td id="cost-gpt4o-in">$0.00000</td>
+                    <td id="cost-gpt4o-out">$0.00000</td>
+                  </tr>
+                  <tr>
+                    <td><strong>GPT-4o-mini (Nhỏ)</strong></td>
+                    <td id="cost-mini-in">$0.00000</td>
+                    <td id="cost-mini-out">$0.00000</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="cost-note">
+                💡 <em>Lưu ý: Đơn giá GPT-4o đắt hơn ~16.67 lần so với GPT-4o-mini cho cùng lượng token.</em>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TAB 4: Retry With Backoff Simulator -->
+    <section class="tab-content" id="tab-retry">
+      <div class="retry-container">
+        
+        <div class="retry-header">
+          <h2>Mô Phỏng Cơ Chế Chịu Lỗi: Exponential Backoff</h2>
+          <p>Kiểm nghiệm hàm <code>retry_with_backoff</code> đã viết trong Part 3: Tự động thử lại khi API gặp lỗi tạm thời (HTTP 503, Rate Limit) với thời gian chờ tăng gấp đôi (0.15s → 0.30s → 0.60s).</p>
+        </div>
+
+        <div class="retry-card">
+          <div class="retry-config-bar">
+            <div class="config-item">
+              <label for="fail-times-select">Số lần giả lập lỗi trước khi thành công:</label>
+              <select id="fail-times-select" class="custom-select">
+                <option value="1">Lỗi 1 lần → Thành công ở lần 2 (1 retry)</option>
+                <option value="2" selected>Lỗi 2 lần → Thành công ở lần 3 (2 retry)</option>
+                <option value="3">Lỗi 3 lần → Thành công ở lần 4 (3 retry)</option>
+                <option value="4">Lỗi 4 lần → Vượt quá max_retries=3 (Fail vĩnh viễn)</option>
+              </select>
+            </div>
+            <button class="btn-primary" id="btn-trigger-retry">
+              <span>🚀 Bắt Đầu Giả Lập Retry</span>
+            </button>
+          </div>
+
+          <!-- Live Visual Timeline -->
+          <div class="retry-timeline-wrapper">
+            <div class="timeline-title">Tiến Trình Thử Lại Trực Quan:</div>
+            <div class="timeline-steps" id="timeline-steps">
+              <div class="timeline-step" id="step-1">
+                <div class="step-num">1</div>
+                <div class="step-desc">Lần 1 (Gốc)</div>
+              </div>
+              <div class="timeline-arrow">→ delay 0.15s →</div>
+              <div class="timeline-step" id="step-2">
+                <div class="step-num">2</div>
+                <div class="step-desc">Retry 1</div>
+              </div>
+              <div class="timeline-arrow">→ delay 0.30s →</div>
+              <div class="timeline-step" id="step-3">
+                <div class="step-num">3</div>
+                <div class="step-desc">Retry 2</div>
+              </div>
+              <div class="timeline-arrow">→ delay 0.60s →</div>
+              <div class="timeline-step" id="step-4">
+                <div class="step-num">4</div>
+                <div class="step-desc">Retry 3</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Event Logs Terminal -->
+          <div class="terminal-card">
+            <div class="terminal-header">
+              <span class="term-dot red"></span>
+              <span class="term-dot yellow"></span>
+              <span class="term-dot green"></span>
+              <span class="term-title">Log Sự Kiện Thời Gian Thực (Backoff Delays)</span>
+            </div>
+            <pre class="terminal-body" id="retry-log">Bấm "Bắt Đầu Giả Lập Retry" để xem cơ chế backoff hoạt động...</pre>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal Memory Inspector -->
+  <div class="modal-backdrop" id="modal-memory" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Lịch Sử Hội Thoại Trong Bộ Nhớ (Max 6 Messages)</h3>
+        <button class="btn-close" id="btn-close-memory">&times;</button>
+      </div>
+      <div class="modal-body" id="memory-content">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
